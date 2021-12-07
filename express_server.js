@@ -30,6 +30,15 @@ app.get('/urls/new', (req, res) => {
   res.render('urls_new');
 });
 
+function generateRandomString() {
+  let randomString = "";
+  for (let i = 0; i < 6; i++) {
+    let aCode = Math.floor(Math.random() * 32) + 56;
+    randomString += String.fromCharCode(aCode);
+  }
+  return randomString;
+}
+
 app.get('/urls/:shortURL', (req, res) => {
   let shortURL = req.params.shortURL
   let longURL = urlDatabase[shortURL]
