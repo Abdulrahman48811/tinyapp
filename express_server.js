@@ -104,7 +104,7 @@ function generateRandomString() {
 app.get('/urls/:shortURL', (req, res) => {
   let shortURL = req.params.shortURL
   let user_id = req.cookies.user_id;
-
+  let longURL = req.params.longURL
   const templateVars = { shortURL, longURL, user: users[user_id] };
   res.render('urls_show', templateVars);
 });
@@ -113,6 +113,8 @@ app.post('/login', (req, res) => {
   let email = req.body.email;
 
   for (let value of Object.values(users)) {
+    console.log(value.email);
+    console.log(email);
     if (value.email === email) {
       res.cookie('user_id', value.id);
     }
@@ -153,14 +155,32 @@ app.get('/register', (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  // const id = generateRandomString();
+  const id = generateRandomString();
   const email = req.body.email;
   const password = req.body.password;
-  let id = generateRandomString();
-
-  users[id] = { id, email, password };
+  if (!email || !password) {
+    return res.status(400).send("email and password cannot be blank");
+  }
+  function findUserByEmail(email) {
+    for (const userId in users) {
+      const user = users[userId];
+      if (user.email === email) {
+        return user;
+      }
+    }
+    return null;
+  }
+  if (findUserByEmail(email)) {
+    return res.status(400).send("that email has been used to register");
+  } else {
+    users[id] =
+    {
+      id,
+      email,
+      password
+    };
+    res.cookie("id", id);
+    res.redirect("/urls");
+  }
   console.log(users);
-
-  res.cookie('user_id', id);
-  res.redirect('/urls');
 });
