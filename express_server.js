@@ -1,7 +1,9 @@
 const express = require("express");
+// const app = express();
+const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
+const PORT = 8080;
 const app = express();
-const PORT = 8080; // default port 8080
-const cookieParser = require('cookie-parser');
 app.set("view engine", "ejs");
 
 // const urlDatabase = {
@@ -9,33 +11,27 @@ app.set("view engine", "ejs");
 //   "9sm5xK": "http://www.google.com"
 // };
 
-const urlDatabase = {
-  b6UTxQ: {
-    longURL: 'https://www.tsn.ca',
-    userID: 'huhu89'
-  },
-  i3BoGr: {
-    longURL: 'https://www.google.ca',
-    userID: 'huhu89'
-  }
-};
-
 const users = {
   "userRandomID": {
-    id: "userRandomID",
+    user_id: "userRandomID",
     email: "user@example.com",
     password: "purple-monkey-dinosaur"
-  },
-  "user2RandomID": {
-    id: "user2RandomID",
-    email: "user2@example.com",
-    password: "dishwasher-funk"
   }
 };
 
+const urlDatabase = {
+  b6UTxQ: {
+      longURL: "https://www.tsn.ca",
+      userID: "aJ48lW"
+  },
+  i3BoGr: {
+      longURL: "https://www.google.ca",
+      userID: "aJ48lW"
+  }
+};
 
-const bodyParser = require("body-parser");
-app.use(bodyParser.urlencoded({extended: true}));
+// const bodyParser = require("body-parser");
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.get("/", (req, res) => {
@@ -43,12 +39,19 @@ app.get("/", (req, res) => {
 });
 
 app.get('/u/:shortURL', (req, res) => {
-  if (urlDatabase[req.params.shortURL]) {
-    res.redirect(urlDatabase[req.params.shortURL].longURL);
+  let shortURL = req.params.shortURL;
+  let user_id = req.cookies.user_id;
+  let urlData = urlDatabase[shortURL];
+
+  let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
+
+  if (invalidAccess) {
+    accessDenialHandler(res, urlData, user_id);
   } else {
-    res.send('Invalid short URL');
+    res.redirect(urlDatabase[shortURL].longURL);
   }
 });
+
 
 app.get('/urls/new', (req, res) => {
   let user_id = req.cookies.user_id;
@@ -68,7 +71,10 @@ app.get('/urls/new', (req, res) => {
 
 app.get('/urls', (req, res) => {
   let user_id = req.cookies.user_id;
-  const templateVars = { urls: urlDatabase, user: users[user_id] };
+  let filteredUrlDatabase = Object.fromEntries(
+    Object.entries(urlDatabase).filter(([ key, value ]) => value.user_id === user_id)
+  );
+  const templateVars = { urls: filteredUrlDatabase, user: users[user_id] };
   res.render('urls_index', templateVars);
 });
 
@@ -97,18 +103,33 @@ app.post('/urls/:shortURL', (req, res) => {
 
 
 app.post('/urls/:shortURL/delete', (req, res) => {
-  let shortURL = req.params.shortURL;
-  delete urlDatabase[shortURL]
-  res.redirect('/urls')
+  let urlData = urlDatabase[req.params.shortURL];
+  let user_id = req.cookies.user_id;
+
+  let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
+
+  if (invalidAccess) {
+    accessDenialHandler(res, urlData, user_id);
+  } else {
+    delete urlDatabase[req.params.shortURL];
+    res.redirect('/urls');
+  }
 });
 
 
 app.post('/urls', (req, res) => {
-  let shortURL = generateRandomString();
-  let longURL = req.body.longURL;
-  let userID = req.cookies.user_id;
-  urlDatabase[shortURL] = { longURL, userID };
-  res.redirect(`/urls/${shortURL}`);
+  let user_id = req.cookies.user_id;
+  let user = users[user_id];
+
+  if (user) {
+    let shortURL = generateRandomString();
+    let longURL = req.body.longURL;
+
+    urlDatabase[shortURL] = { longURL, user_id };
+    res.redirect(`/urls/${shortURL}`);
+  } else {
+    res.send('Request Denied. Please log in');
+  }
 });
 
 
@@ -123,12 +144,44 @@ function generateRandomString() {
 }
 
 app.get('/urls/:shortURL', (req, res) => {
-  let shortURL = req.params.shortURL;
+  let urlData = urlDatabase[req.params.shortURL];
   let user_id = req.cookies.user_id;
-  let longURL = req.params.longURL;
-  const templateVars = { shortURL, longURL, user: users[user_id] };
-  res.render('urls_show', templateVars);
+
+  let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
+
+  if (invalidAccess) {
+    accessDenialHandler(res, urlData, user_id);
+  } else {
+    //* happy path
+    const templateVars = {
+      shortURL: req.params.shortURL,
+      longURL: urlData.longURL,
+      user: users[user_id]
+    };
+    res.render('urls_show', templateVars);
+  }
 });
+
+
+app.post('/urls/:shortURL', (req, res) => {
+  let newLongURL = req.body.newLongURL;
+
+  let urlData = urlDatabase[req.params.shortURL];
+  let user_id = req.cookies.user_id;
+
+  let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
+
+  if (invalidAccess) {
+    accessDenialHandler(res, urlData, user_id);
+  } else if (!newLongURL) {
+    res.send('No URL entered');
+  } else {
+    urlDatabase[req.params.shortURL].longURL = newLongURL;
+    res.redirect('/urls');
+  }
+});
+
+
 
 app.post('/login', (req, res) => {
   let email = req.body.email;
@@ -212,23 +265,51 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   let { email, password } = req.body;
 
-  let user = searchUser(email);
+  let user = getUserByEmail(email);
 
   if (!email || !password) {
     res.statusCode = 400;
-    res.send('400 - missing email or password');
-  } else if (searchUser(email)) {
-    res.statusCode = 400;
-    res.send('400 - email already exists');
-  } else {
-    let id = generateRandomString();
+    if (user) {
+      //* happy path
+      if (user.password === password) {
+        res.cookie('user_id', user.user_id);
+        res.redirect('/urls');
+      } else {
+        res.statusCode = 400;
+        let email = req.body.email;
+        let password = req.body.password;
+        console.log(email, password);
+        if (!email || !password) {
+          res.statusCode = 400;
+          res.send('400 - missing email or password');
+        } else if (getUserByEmail(email)) {
+          res.statusCode = 400;
+          res.send('400 - email already exists');
+        } else {
+          let user_id = generateRandomString();
 
-    users[id] = { id, email, password };
-    console.log(users);
+          users[user_id] = { user_id, email, password };
+          console.log(users);
+          res.redirect(307, '/login');
+        }
+      }
+    }
+  };
 
-    res.cookie('user_id', id);
-    res.redirect('/urls');
-  }
+
+  //   res.send('400 - missing email or password');
+  // } else if (getUserByEmail(email)) {
+  //   res.statusCode = 400;
+  //   res.send('400 - email already exists');
+  // } else {
+  //   let user_id = generateRandomString();
+
+  //   users[user_id] = { user_id, email, password };
+  //   console.log(users);
+
+  //   res.cookie('user_id', id);
+  //   res.redirect('/urls');
+  // }
 });
 
 app.listen(PORT, () => {
@@ -239,8 +320,28 @@ function generateRandomString() {
   return Math.random().toString(36).substring(2, 8);
 }
 
-function searchUser(email) {
-  for (let user of Object.values(users)) {
+function getUserByEmail(email) {
+  let usersArr = Object.values(users);
+
+  for (let user of usersArr) {
     if (user.email === email) return user;
   }
+  return undefined;
+}
+
+function accessCheck(urlData, user_id) {
+  let invalidAccess = false;
+  const accessDenialHandler = function(res, urlData, user_id) {
+    if (!urlData) {
+      res.send('Invalid short URL');
+    } else if (!user_id) {
+      res.send('Please login to see your URLs');
+    } else if (urlData.user_id !== user_id) {
+      res.send('Access restricted. Please log onto the correct account to view this URL');
+    }
+  };
+  if (!urlData || !user_id || urlData.user_id !== user_id) {
+    invalidAccess = true;
+  }
+  return { invalidAccess, accessDenialHandler };
 }
