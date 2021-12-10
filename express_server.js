@@ -3,6 +3,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const bcrypt = require('bcryptjs');
+const cookieSession = require('cookie-session');
+const { getUserByEmail } = require('./helpers.js');
 const PORT = 8080;
 const app = express();
 app.set("view engine", "ejs");
@@ -33,10 +35,22 @@ const urlDatabase = {
 
 // const bodyParser = require("body-parser");
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(
+  cookieSession({
+    name: 'session',
+    keys: [ 'superUltraSpecialSecretKey' ],
+    user_id: undefined,
+    maxAge: 60 * 60 * 1000 
+  })
+);
 
 app.get("/", (req, res) => {
-  res.redirect("/urls");
+  let user_id = req.session.user_id;
+  if (user_id && users[user_id]) {
+    res.redirect('/urls');
+  } else {
+    res.redirect('/login');
+  }
 });
 
 app.get('/database', (req, res) => {
@@ -45,7 +59,8 @@ app.get('/database', (req, res) => {
 
 app.get('/u/:shortURL', (req, res) => {
   let shortURL = req.params.shortURL;
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.session.user_id;
   let urlData = urlDatabase[shortURL];
 
   let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
@@ -59,7 +74,9 @@ app.get('/u/:shortURL', (req, res) => {
 
 
 app.get('/urls', (req, res) => {
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.session.user_id;
+  console.log(user_id);
   let filteredUrlDatabase = Object.fromEntries(
     Object.entries(urlDatabase).filter(([ key, value ]) => value.user_id === user_id)
   );
@@ -69,9 +86,10 @@ app.get('/urls', (req, res) => {
 
 
 app.post('/urls', (req, res) => {
-  let user_id = req.cookies.user_id;
-  let user = users[user_id];
+  // let user_id = req.cookies.user_id;
 
+  let user_id = req.session.user_id;
+  let user = users[user_id];
   if (user) {
     let shortURL = generateRandomString();
     let longURL = req.body.longURL;
@@ -84,7 +102,8 @@ app.post('/urls', (req, res) => {
 });
 
 app.get('/urls/new', (req, res) => {
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.session.user_id;
   if (user_id) {
     const templateVars = { user: users[user_id] };
     res.render('urls_new', templateVars);
@@ -95,7 +114,8 @@ app.get('/urls/new', (req, res) => {
 
 app.get('/urls/:shortURL', (req, res) => {
   let urlData = urlDatabase[req.params.shortURL];
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.session.user_id;
 
   let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
 
@@ -116,7 +136,8 @@ app.post('/urls/:shortURL', (req, res) => {
   let newLongURL = req.body.newLongURL;
 
   let urlData = urlDatabase[req.params.shortURL];
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.sessionOptions.user_id;
 
   let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
 
@@ -132,7 +153,8 @@ app.post('/urls/:shortURL', (req, res) => {
 
 app.post('/urls/:shortURL/delete', (req, res) => {
   let urlData = urlDatabase[req.params.shortURL];
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.sessionOptions.user_id;
 
   let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
 
@@ -149,7 +171,8 @@ app.get("/urls.json", (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  let user_id = req.cookies.user_id;
+  // let user_id = req.cookies.user_id;
+  let user_id = req.session.user_id;
   const templateVars = { user: users[user_id] };
   res.render('login', templateVars);
 });
@@ -157,7 +180,7 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   let { email, password } = req.body;
 
-  let user = getUserByEmail(email);
+  let user = getUserByEmail(email, users);
 
   if (!email || !password) {
     res.statusCode = 400;
@@ -165,7 +188,8 @@ app.post('/login', (req, res) => {
   } else {
     if (user) {
       if (bcrypt.compareSync(password, user.hashedPassword)) {
-        res.cookie('user_id', user.user_id);
+        // res.cookie('user_id', user.user_id);
+        req.session.user_id = user.user_id;
         res.redirect('/urls');
       } else {
         res.statusCode = 400;
@@ -179,7 +203,8 @@ app.post('/login', (req, res) => {
 });
 
 app.post('/logout', (req, res) => {
-  res.clearCookie('user_id');
+  // res.clearCookie('user_id');
+  req.session.user_id = '';
   res.redirect('/urls');
 });
 
@@ -197,7 +222,7 @@ app.post('/register', (req, res) => {
   if (!email || !password) {
     res.statusCode = 400;
     res.send('400 - missing email or password');
-  } else if (getUserByEmail(email)) {
+  } else if (getUserByEmail(email, users)) {
     res.statusCode = 400;
     res.send('400 - email already exists');
   } else {
@@ -218,14 +243,14 @@ function generateRandomString() {
   return Math.random().toString(36).substring(2, 8);
 }
 
-function getUserByEmail(email) {
-  let usersArr = Object.values(users);
+// function getUserByEmail(email) {
+//   let usersArr = Object.values(users);
 
-  for (let user of usersArr) {
-    if (user.email === email) return user;
-  }
-  return undefined;
-}
+//   for (let user of usersArr) {
+//     if (user.email === email) return user;
+//   }
+//   return undefined;
+// }
 
 function accessCheck(urlData, user_id) {
   let invalidAccess = false;
