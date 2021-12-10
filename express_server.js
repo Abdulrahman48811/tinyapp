@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const bcrypt = require('bcryptjs');
 const cookieSession = require('cookie-session');
 const { getUserByEmail } = require('./helpers.js');
+const methodOverride = require('method-override');
 const PORT = 8080;
 const app = express();
 app.set("view engine", "ejs");
@@ -43,6 +44,7 @@ app.use(
     maxAge: 60 * 60 * 1000 
   })
 );
+app.use(methodOverride('_method'));
 
 app.get("/", (req, res) => {
   let user_id = req.session.user_id;
@@ -93,6 +95,9 @@ app.post('/urls', (req, res) => {
   if (user) {
     let shortURL = generateRandomString();
     let longURL = req.body.longURL;
+    let date = new Date();
+    let timesShortURLVisited = 0;
+    let uniqueVisits = 0;
 
     urlDatabase[shortURL] = { longURL, user_id };
     res.redirect(`/urls/${shortURL}`);
@@ -132,12 +137,12 @@ app.get('/urls/:shortURL', (req, res) => {
   }
 });
 
-app.post('/urls/:shortURL', (req, res) => {
+app.put('/urls/:shortURL', (req, res) => {
   let newLongURL = req.body.newLongURL;
 
   let urlData = urlDatabase[req.params.shortURL];
   // let user_id = req.cookies.user_id;
-  let user_id = req.sessionOptions.user_id;
+  let user_id = req.session.user_id;
 
   let { invalidAccess, accessDenialHandler } = accessCheck(urlData, user_id);
 
@@ -151,7 +156,7 @@ app.post('/urls/:shortURL', (req, res) => {
   }
 });
 
-app.post('/urls/:shortURL/delete', (req, res) => {
+app.delete('/urls/:shortURL', (req, res) => {
   let urlData = urlDatabase[req.params.shortURL];
   // let user_id = req.cookies.user_id;
   let user_id = req.sessionOptions.user_id;
