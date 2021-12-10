@@ -2,6 +2,7 @@ const express = require("express");
 // const app = express();
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
+const bcrypt = require('bcryptjs');
 const PORT = 8080;
 const app = express();
 app.set("view engine", "ejs");
@@ -15,7 +16,7 @@ const users = {
   "abdul": {
     user_id: "abdul",
     email: "abdulrahman48811@gmail.com",
-    password: "purple"
+    // hashedPassword: /* 'asdf' */ `purple'
   }
 };
 
@@ -36,6 +37,10 @@ app.use(cookieParser());
 
 app.get("/", (req, res) => {
   res.redirect("/urls");
+});
+
+app.get('/database', (req, res) => {
+  res.json({ users, urlDatabase });
 });
 
 app.get('/u/:shortURL', (req, res) => {
@@ -159,7 +164,7 @@ app.post('/login', (req, res) => {
     res.send('400 - missing email or password');
   } else {
     if (user) {
-      if (user.password === password) {
+      if (bcrypt.compareSync(password, user.hashedPassword)) {
         res.cookie('user_id', user.user_id);
         res.redirect('/urls');
       } else {
@@ -187,7 +192,7 @@ app.get('/register', (req, res) => {
 app.post('/register', (req, res) => {
   let email = req.body.email;
   let password = req.body.password;
-
+  let hashedPassword = bcrypt.hashSync(password, 10);
   console.log(email, password);
   if (!email || !password) {
     res.statusCode = 400;
@@ -198,7 +203,7 @@ app.post('/register', (req, res) => {
   } else {
     let user_id = generateRandomString();
 
-    users[user_id] = { user_id, email, password };
+    users[user_id] = { user_id, email, hashedPassword };
     console.log(users);
     res.redirect(307, '/login');
   }

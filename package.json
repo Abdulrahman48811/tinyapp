@@ -2,23 +2,24 @@
   "name": "tinyapp",
   "version": "1.0.0",
   "description": "",
-  "main": "express_server.js",
+  "main": "index.js",
   "scripts": {
     "start": "./node_modules/.bin/nodemon -L express_server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Abdulrahman48811/tinyapp.git"
+    "url": "git+https://github.com/Lightbulbly/tinyapp.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Abdulrahman48811/tinyapp/issues"
+    "url": "https://github.com/Lightbulbly/tinyapp/issues"
   },
-  "homepage": "https://github.com/Abdulrahman48811/tinyapp#readme",
+  "homepage": "https://github.com/Lightbulbly/tinyapp#readme",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "body-parser": "^1.19.0",
     "cookie-parser": "^1.4.6",
     "ejs": "^3.1.6",
