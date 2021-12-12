@@ -14,33 +14,45 @@
     <h3>My URLs</h3>
     <   <% if (user) { %>
       <% if (Object.keys(urls).length !==0) { %>
-        <table class="table">
+        <table class="table-hover">
           <thead>
             <tr>
               <th scope="col">Short URL</th>
               <th scope="col">Long URL</th>
+              <th scope="col">Created</th>
+              <th scope="col">Visited</th>
+              <th scope="col">Unique Visitors</th>
               <th scope="col">EDIT</th>
               <th scope="col">DELETE</th>
             </tr>
           </thead>
           <tbody>
-            <% for(let url in urls) { %>
+            <% for(let shortUrl in urls) { %>
               <tr>
                 <td>
-                  <%= url %>
+                  <%= shortUrl %>
                 </td>
                 <td>
-                  <%= urls[url].longURL %>
+                  <%= urls[shortUrl].longURL %>
                 </td>
                 <td>
-                  <a href="/urls/<%=url%>">
+                  <%=urls[shortUrl].created %>
+                </td>
+                <td>
+                  <%=urls[shortUrl].visited %>
+                </td>
+                <td>
+                  <%=urls[shortUrl].visitors.length %>
+                </td>
+                <td>
+                  <a href="/urls/<%=shortUrl%>">
                     <button type='button' class='btn btn-primary'>EDIT
                     </button>
                   </a>
                 </td>
                 <td>
-                  <form method="POST" action="/urls/<%= url %>/delete">
-                    <button type='submit' class='btn btn-primary'>?_method=DELETE</button>
+                  <form method="POST" action="/urls/<%= shortUrl %>?_method=DELETE">
+                    <button type='submit' class='btn btn-primary'>DELETE</button>
                   </form>
                 </td>
               </tr>
